@@ -110,7 +110,7 @@ if uploaded_file:
                 articles = crawl_news(word + " 교과서")
                 for article in articles:
                     st.markdown(f"- [{article['제목']}]({article['링크']})  
-  <{article['언론사']} | {article['날짜']}>")
+  ⏱ {article['날짜']} | 📰 {article['언론사']}")
 
     with col2:
         st.markdown("### 📚 주제별 추천 뉴스")
@@ -120,4 +120,4 @@ if uploaded_file:
                 articles = crawl_news(topic)
                 for article in articles:
                     st.markdown(f"- [{article['제목']}]({article['링크']})  
-  <{article['언론사']} | {article['날짜']}>")
+  📰 {article['언론사']}")
