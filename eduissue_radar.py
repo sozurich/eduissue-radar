@@ -99,6 +99,7 @@ if uploaded_file:
     for word, freq in top_keywords:
         st.write(f"- {word} ({freq}회)")
 
+    # 🎯 연관 뉴스 기사 + 주제별 뉴스 2단 컬럼 분할 + 접이식 구성
     st.subheader("📰 뉴스 요약")
     col1, col2 = st.columns(2)
 
