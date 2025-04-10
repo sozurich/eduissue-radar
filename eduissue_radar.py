@@ -3,7 +3,7 @@
 import streamlit as st
 import pandas as pd
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
@@ -62,8 +62,12 @@ def crawl_news(query):
             seen_titles.add(title)
             link = title_tag['href']
             press = item.select_one(".info_group span").text if item.select_one(".info_group span") else "언론사 미확인"
-            date_tag = item.select_one(".info_group span:nth-of-type(2)")
-            pub_date = date_tag.text if date_tag else "날짜 미확인"
+            date_tags = item.select(".info_group span")
+            pub_date = "날짜 미확인"
+            for tag in date_tags:
+                if any(keyword in tag.text for keyword in ["분 전", "시간 전", "일 전", "202", "203"]):
+                    pub_date = tag.text
+                    break
             results.append({"제목": title, "링크": link, "언론사": press, "날짜": pub_date})
         if len(results) >= 5:
             break
@@ -95,10 +99,43 @@ if uploaded_file:
     st.write(issue_df[['날짜', '시간', '사용자', '메시지']])
 
     st.subheader("🔥 자주 언급된 키워드")
-    for word, freq in top_keywords:
-        st.write(f"- {word} ({freq}회)")
 
-    # 🎯 연관 뉴스 기사 + 주제별 뉴스 2단 컬럼 분할 + 접이식 구성
+    groupings = {
+        '배송 관련': ['배송', '도착', '배달', '택배'],
+        '지연/누락': ['지연', '누락', '연기'],
+        '불량/오류': ['불량', '오류', '고장'],
+        '정산/반품': ['정산', '반품', '환불'],
+        '기타': []
+    }
+
+    summary = defaultdict(list)
+
+    for word, freq in top_keywords:
+        categorized = False
+        for topic, keywords in groupings.items():
+            if any(k in word for k in keywords):
+                summary[topic].append((word, freq))
+                categorized = True
+                break
+        if not categorized:
+            summary['기타'].append((word, freq))
+
+    example_sentences = {
+        '배송 관련': ["배송이 아직 도착하지 않았어요", "택배가 오지 않았습니다"],
+        '지연/누락': ["교과서가 누락되었어요", "배송이 너무 지연돼요"],
+        '불량/오류': ["인쇄 오류가 있어요", "불량 교과서가 왔어요"],
+        '정산/반품': ["정산이 안 됐어요", "반품하고 싶은데 어떻게 하나요?"],
+        '기타': ["기타 이슈가 있습니다"]
+    }
+
+    for topic, words in summary.items():
+        st.markdown(f"**🗂 {topic}**")
+        for word, freq in words:
+            st.write(f"- {word} ({freq}회)")
+        with st.expander("💬 대표 민원 예시 보기"):
+            for sentence in example_sentences.get(topic, []):
+                st.markdown(f"• {sentence}")
+
     st.subheader("📰 뉴스 요약")
     col1, col2 = st.columns(2)
 
