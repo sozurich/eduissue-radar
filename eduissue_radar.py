@@ -9,6 +9,7 @@ from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
 
+# 1. 텍스트 파일 파싱 함수
 def parse_kakao_text(file):
     text = file.read().decode('utf-8')
     lines = text.splitlines()
@@ -34,6 +35,7 @@ def parse_kakao_text(file):
 
     return pd.DataFrame(parsed)
 
+# 2. 키워드 기반 민원 메시지 필터링
 issue_keywords = ["배송", "지연", "누락", "불량", "부족", "정산", "반품", "추가", "오류"]
 
 def extract_issues(df):
@@ -43,6 +45,7 @@ def extract_issues(df):
     count = Counter(nouns)
     return issue_msgs, count.most_common(10)
 
+# 3. 뉴스 크롤러
 def crawl_news(query):
     headers = {"User-Agent": "Mozilla/5.0"}
     url = f"https://search.naver.com/search.naver?where=news&query={query}"
@@ -67,6 +70,7 @@ def crawl_news(query):
             break
     return results
 
+# 4. Streamlit UI
 st.title("📚 EduIssue Radar")
 st.markdown("교과서 민원 메시지 + 뉴스 키워드 통합 분석기")
 
