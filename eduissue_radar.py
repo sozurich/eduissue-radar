@@ -40,7 +40,7 @@ issue_keywords = ["배송", "지연", "누락", "불량", "부족", "정산", "�
 def extract_issues(df):
     issue_msgs = df[df['메시지'].str.contains('|'.join(issue_keywords))]
     all_words = ' '.join(issue_msgs['메시지'].tolist())
-    nouns = re.findall(r'[가-힣]+', all_words)
+    nouns = re.findall(r'[\uAC00-\uD7A3]+', all_words)
     count = Counter(nouns)
     return issue_msgs, count.most_common(10)
 
@@ -122,5 +122,5 @@ if uploaded_file:
                 for article in articles:
                     st.markdown(
                         f"- [{article['제목']}]({article['링크']})  \n"
-                        f"  📰 {article['언론사']}"
+                        f"  ⏱ {article['날짜']} | 📰 {article['언론사']}"
                     )
