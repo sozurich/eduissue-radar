@@ -74,3 +74,12 @@ if uploaded_file:
         articles = crawl_news(word + " 교과서")
         for article in articles:
             st.markdown(f"- [{article['제목']}]({article['링크']}) <{article['언론사']}>")
+
+    # 🎯 추가 주제별 뉴스 기사
+    st.subheader("📌 주제별 추천 뉴스")
+    extra_topics = ["교과서", "AI 디지털교과서", "비상교육", "천재교육", "천재교과서", "미래엔", "아이스크림미디어", "동아출판", "지학사"]
+    for topic in extra_topics:
+        st.markdown(f"**📚 {topic} 관련 뉴스**")
+        articles = crawl_news(topic)
+        for article in articles:
+            st.markdown(f"- [{article['제목']}]({article['링크']}) <{article['언론사']}>")
