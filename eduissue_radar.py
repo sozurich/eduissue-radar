@@ -1,4 +1,3 @@
-
 # EduIssue Radar - Streamlit 앱 (프로토타입)
 
 import streamlit as st
@@ -12,15 +11,20 @@ from bs4 import BeautifulSoup
 # 1. 텍스트 파일 파싱 함수 (날짜별로 분리)
 def parse_kakao_text(file):
     text = file.read().decode('utf-8')
-    date_blocks = re.split(r'-{10,}.*?\d{4}년 \d{1,2}월 \d{1,2}일.*?-{10,}', text)
+    date_pattern = r'-{10,}\s*(\d{4}년 \d{1,2}월 \d{1,2}일.*?)\s*-{10,}'
+    date_headers = re.findall(date_pattern, text)
     messages = re.findall(r'\[(.*?)\] \[(오전|오후) (\d{1,2}:\d{2})\] (.+)', text)
     parsed = []
+    date_index = 0
     for user, ampm, time, msg in messages:
         hour, minute = map(int, time.split(':'))
         if ampm == '오후' and hour != 12:
             hour += 12
         timestamp = f"{hour:02}:{minute:02}"
-        parsed.append({"사용자": user, "시간": timestamp, "메시지": msg})
+        date_str = date_headers[min(date_index, len(date_headers)-1)]
+        parsed.append({"날짜": date_str, "사용자": user, "시간": timestamp, "메시지": msg})
+        if '---------------' in msg:
+            date_index += 1
     return pd.DataFrame(parsed)
 
 # 2. 키워드 기반 민원 메시지 필터링
@@ -58,9 +62,14 @@ uploaded_file = st.file_uploader("카카오톡 채팅 .txt 파일을 업로드�
 
 if uploaded_file:
     df = parse_kakao_text(uploaded_file)
-    st.success(f"총 {len(df)}개의 메시지를 불러왔습니다.")
+    df['날짜'] = df['날짜'].fillna(method='ffill')
+    date_options = sorted(df['날짜'].unique())
+    selected_date = st.selectbox("분석할 날짜를 선택하세요", date_options)
+    df_selected = df[df['날짜'] == selected_date]
 
-    issue_df, top_keywords = extract_issues(df)
+    st.success(f"{selected_date} 날짜의 메시지 {len(df_selected)}건 분석 중...")
+
+    issue_df, top_keywords = extract_issues(df_selected)
     st.subheader("🔍 민원 메시지 요약")
     st.write(issue_df[['시간', '사용자', '메시지']])
 
