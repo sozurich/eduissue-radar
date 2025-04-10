@@ -1,4 +1,3 @@
-
 # EduIssue Radar - Streamlit 앱 (기간 분석 기능 포함)
 
 import streamlit as st
@@ -9,7 +8,7 @@ from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
 
-# 1. 텍스트 파일 파싱 함수
+# 1. 텍스트 파일 파싱 함수 (줄 단위 날짜 매핑)
 def parse_kakao_text(file):
     text = file.read().decode('utf-8')
     lines = text.splitlines()
@@ -41,11 +40,11 @@ issue_keywords = ["배송", "지연", "누락", "불량", "부족", "정산", "�
 def extract_issues(df):
     issue_msgs = df[df['메시지'].str.contains('|'.join(issue_keywords))]
     all_words = ' '.join(issue_msgs['메시지'].tolist())
-    nouns = re.findall(r'[\uAC00-\uD7A3]+', all_words)
+    nouns = re.findall(r'[가-힣]+', all_words)
     count = Counter(nouns)
     return issue_msgs, count.most_common(10)
 
-# 3. 뉴스 크롤러
+# 3. 뉴스 크롤러 함수 (네이버 뉴스 검색)
 def crawl_news(query):
     headers = {"User-Agent": "Mozilla/5.0"}
     url = f"https://search.naver.com/search.naver?where=news&query={query}"
@@ -70,7 +69,7 @@ def crawl_news(query):
             break
     return results
 
-# 4. Streamlit UI
+# 4. Streamlit 인터페이스
 st.title("📚 EduIssue Radar")
 st.markdown("교과서 민원 메시지 + 뉴스 키워드 통합 분석기")
 
@@ -99,6 +98,7 @@ if uploaded_file:
     for word, freq in top_keywords:
         st.write(f"- {word} ({freq}회)")
 
+    # 🎯 연관 뉴스 기사 + 주제별 뉴스 2단 컬럼 분할 + 접이식 구성
     st.subheader("📰 뉴스 요약")
     col1, col2 = st.columns(2)
 
@@ -109,8 +109,7 @@ if uploaded_file:
                 articles = crawl_news(word + " 교과서")
                 for article in articles:
                     st.markdown(
-                        f"- [{article['제목']}]({article['링크']})  
-"
+                        f"- [{article['제목']}]({article['링크']})  \n"
                         f"  ⏱ {article['날짜']} | 📰 {article['언론사']}"
                     )
 
@@ -122,7 +121,6 @@ if uploaded_file:
                 articles = crawl_news(topic)
                 for article in articles:
                     st.markdown(
-                        f"- [{article['제목']}]({article['링크']})  
-"
+                        f"- [{article['제목']}]({article['링크']})  \n"
                         f"  📰 {article['언론사']}"
                     )
