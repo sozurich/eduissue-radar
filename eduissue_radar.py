@@ -1,4 +1,5 @@
-# EduIssue Radar - Streamlit 앱 (프로토타입)
+
+# EduIssue Radar - Streamlit 앱 (기간 분석 기능 포함)
 
 import streamlit as st
 import pandas as pd
@@ -8,23 +9,30 @@ from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
 
-# 1. 텍스트 파일 파싱 함수 (날짜별로 분리)
+# 1. 텍스트 파일 파싱 함수 (줄 단위 날짜 매핑)
 def parse_kakao_text(file):
     text = file.read().decode('utf-8')
-    date_pattern = r'-{10,}\s*(\d{4}년 \d{1,2}월 \d{1,2}일.*?)\s*-{10,}'
-    date_headers = re.findall(date_pattern, text)
-    messages = re.findall(r'\[(.*?)\] \[(오전|오후) (\d{1,2}:\d{2})\] (.+)', text)
+    lines = text.splitlines()
     parsed = []
-    date_index = 0
-    for user, ampm, time, msg in messages:
-        hour, minute = map(int, time.split(':'))
-        if ampm == '오후' and hour != 12:
-            hour += 12
-        timestamp = f"{hour:02}:{minute:02}"
-        date_str = date_headers[min(date_index, len(date_headers)-1)]
-        parsed.append({"날짜": date_str, "사용자": user, "시간": timestamp, "메시지": msg})
-        if '---------------' in msg:
-            date_index += 1
+    current_date = None
+    date_pattern = r'-{10,}\s*(\d{4}년 \d{1,2}월 \d{1,2}일.*?)\s*-{10,}'
+    msg_pattern = r'\[(.*?)\] \[(오전|오후) (\d{1,2}:\d{2})\] (.+)'
+
+    for line in lines:
+        date_match = re.match(date_pattern, line)
+        if date_match:
+            current_date = date_match.group(1)
+            continue
+
+        msg_match = re.match(msg_pattern, line)
+        if msg_match and current_date:
+            user, ampm, time, msg = msg_match.groups()
+            hour, minute = map(int, time.split(':'))
+            if ampm == '오후' and hour != 12:
+                hour += 12
+            timestamp = f"{hour:02}:{minute:02}"
+            parsed.append({"날짜": current_date, "사용자": user, "시간": timestamp, "메시지": msg})
+
     return pd.DataFrame(parsed)
 
 # 2. 키워드 기반 민원 메시지 필터링
@@ -44,14 +52,20 @@ def crawl_news(query):
     res = requests.get(url, headers=headers)
     soup = BeautifulSoup(res.text, 'html.parser')
     news_items = soup.select(".list_news .news_area")
+    seen_titles = set()
     results = []
-    for item in news_items[:5]:
+    for item in news_items:
         title_tag = item.select_one(".news_tit")
         if title_tag:
-            title = title_tag.text
+            title = title_tag.text.strip()
+            if title in seen_titles:
+                continue
+            seen_titles.add(title)
             link = title_tag['href']
             press = item.select_one(".info_group span").text if item.select_one(".info_group span") else "언론사 미확인"
             results.append({"제목": title, "링크": link, "언론사": press})
+        if len(results) >= 5:
+            break
     return results
 
 # 4. Streamlit 인터페이스
@@ -63,15 +77,21 @@ uploaded_file = st.file_uploader("카카오톡 채팅 .txt 파일을 업로드�
 if uploaded_file:
     df = parse_kakao_text(uploaded_file)
     df['날짜'] = df['날짜'].fillna(method='ffill')
-    date_options = sorted(df['날짜'].unique())
-    selected_date = st.selectbox("분석할 날짜를 선택하세요", date_options)
-    df_selected = df[df['날짜'] == selected_date]
+    df['날짜'] = pd.to_datetime(df['날짜'].str.extract(r'(\d{4}년 \d{1,2}월 \d{1,2}일)')[0], format="%Y년 %m월 %d일")
 
-    st.success(f"{selected_date} 날짜의 메시지 {len(df_selected)}건 분석 중...")
+    min_date = df['날짜'].min()
+    max_date = df['날짜'].max()
+
+    st.markdown(f"**분석 가능한 날짜 범위:** {min_date.date()} ~ {max_date.date()}")
+    start_date, end_date = st.date_input("분석할 기간을 선택하세요", [min_date, max_date])
+
+    df_selected = df[(df['날짜'] >= pd.to_datetime(start_date)) & (df['날짜'] <= pd.to_datetime(end_date))]
+
+    st.success(f"{start_date} ~ {end_date} 기간의 메시지 {len(df_selected)}건 분석 중...")
 
     issue_df, top_keywords = extract_issues(df_selected)
     st.subheader("🔍 민원 메시지 요약")
-    st.write(issue_df[['시간', '사용자', '메시지']])
+    st.write(issue_df[['날짜', '시간', '사용자', '메시지']])
 
     st.subheader("🔥 자주 언급된 키워드")
     for word, freq in top_keywords:
