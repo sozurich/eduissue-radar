@@ -1,3 +1,4 @@
+
 # EduIssue Radar - Streamlit 앱 (기간 분석 기능 포함)
 
 import streamlit as st
@@ -40,7 +41,7 @@ issue_keywords = ["배송", "지연", "누락", "불량", "부족", "정산", "�
 def extract_issues(df):
     issue_msgs = df[df['메시지'].str.contains('|'.join(issue_keywords))]
     all_words = ' '.join(issue_msgs['메시지'].tolist())
-    nouns = re.findall(r'[가-힣]+', all_words)
+    nouns = re.findall(r'[\uAC00-\uD7A3]+', all_words)
     count = Counter(nouns)
     return issue_msgs, count.most_common(10)
 
@@ -62,9 +63,7 @@ def crawl_news(query):
             seen_titles.add(title)
             link = title_tag['href']
             press = item.select_one(".info_group span").text if item.select_one(".info_group span") else "언론사 미확인"
-            date_tag = item.select_one(".info_group span:nth-of-type(2)")
-            pub_date = date_tag.text if date_tag else "날짜 미확인"
-            results.append({"제목": title, "링크": link, "언론사": press, "날짜": pub_date})
+            results.append({"제목": title, "링크": link, "언론사": press})
         if len(results) >= 5:
             break
     return results
@@ -98,7 +97,6 @@ if uploaded_file:
     for word, freq in top_keywords:
         st.write(f"- {word} ({freq}회)")
 
-    # 🎯 연관 뉴스 기사 + 주제별 뉴스 2단 컬럼 분할 + 접이식 구성
     st.subheader("📰 뉴스 요약")
     col1, col2 = st.columns(2)
 
@@ -108,10 +106,7 @@ if uploaded_file:
             with st.expander(f"🔎 {word} 관련 뉴스"):
                 articles = crawl_news(word + " 교과서")
                 for article in articles:
-                    st.markdown(
-                        f"- [{article['제목']}]({article['링크']})  \n"
-                        f"  ⏱ {article['날짜']} | 📰 {article['언론사']}"
-                    )
+                    st.markdown(f"- [{article['제목']}]({article['링크']}) <{article['언론사']}>")
 
     with col2:
         st.markdown("### 📚 주제별 추천 뉴스")
@@ -120,7 +115,4 @@ if uploaded_file:
             with st.expander(f"📘 {topic} 관련 뉴스"):
                 articles = crawl_news(topic)
                 for article in articles:
-                    st.markdown(
-                        f"- [{article['제목']}]({article['링크']})  \n"
-                        f"  📰 {article['언론사']}"
-                    )
+                    st.markdown(f"- [{article['제목']}]({article['링크']}) <{article['언론사']}>")
