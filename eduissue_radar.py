@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 import re
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 import requests
 from bs4 import BeautifulSoup
@@ -80,7 +80,7 @@ def render_articles(articles):
 
 # 5. Streamlit UI
 st.title("📚 EduIssue Radar")
-st.markdown("교과서 민원 메시지 + 뉴스 요약 분석기")
+st.markdown("교과서 민원 메시지 + 최신 뉴스 요약 분석기")
 
 uploaded = st.file_uploader("카카오톡 채팅 .txt 파일 업로드", type="txt")
 if uploaded:
@@ -95,7 +95,7 @@ if uploaded:
     start_d, end_d = st.date_input("분석 기간 선택", [min_d, max_d])
     df_sel = df[(df['날짜'] >= pd.to_datetime(start_d)) & (df['날짜'] <= pd.to_datetime(end_d))]
 
-    tab1, tab2 = st.tabs(["📊 민원 분석", "📰 뉴스 요약"])
+    tab1, tab2 = st.tabs(["📊 민원 분석", "📰 최신 뉴스 요약"])
 
     with tab1:
         st.success(f"{start_d} ~ {end_d} 메시지 {len(df_sel)}건 분석")
@@ -103,22 +103,24 @@ if uploaded:
         st.subheader("🚨 민원 메시지")
         st.write(issue_df[['날짜', '시간', '사용자', '메시지']])
         st.markdown("**민원 키워드 TOP10**")
-        # 키워드 3열 레이아웃
         for i in range(0, len(top_issues), 3):
             cols = st.columns(3)
             for j, (kw, cnt) in enumerate(top_issues[i:i+3]):
                 cols[j].markdown(f"- **{kw}** ({cnt}회)")
 
     with tab2:
-        st.subheader("📰 연관 뉴스 기사")
-        extra_topics = [kw for kw, _ in top_issues[:3]]
+        st.subheader("📰 최신 뉴스 (최근 7일)")
+        threshold = datetime.now() - timedelta(days=7)
+        # 연관 뉴스
+        extra_topics = [kw for kw, _ in extract_issues(df_sel)[1][:3]]
         for word in extra_topics:
-            with st.expander(f"🔎 {word} 관련 뉴스"):
-                arts = crawl_google_news(word)
+            with st.expander(f"🔎 {word} 관련 최신 뉴스"):
+                arts = [a for a in crawl_google_news(word) if a['날짜'] >= threshold]
                 render_articles(arts)
-        st.markdown("### 📚 주제별 추천 뉴스")
+        # 주제별 추천
+        st.markdown("### 📚 주제별 최신 뉴스 (최근 7일)")
         topics = ["교과서", "AI 디지털교과서", "비상교육", "천재교육", "천재교과서", "미래엔", "아이스크림미디어", "동아출판", "지학사"]
         for topic in topics:
-            with st.expander(f"📘 {topic} 관련 뉴스"):
-                arts = crawl_google_news(topic)
+            with st.expander(f"📘 {topic} 관련 최신 뉴스"):
+                arts = [a for a in crawl_google_news(topic) if a['날짜'] >= threshold]
                 render_articles(arts)
