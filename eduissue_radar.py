@@ -1,6 +1,4 @@
 
-# EduIssue Radar - Google 뉴스 RSS 기반
-
 import streamlit as st
 import pandas as pd
 import re
@@ -9,7 +7,6 @@ from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
 
-# 1. 텍스트 파일 파싱 함수 (줄 단위 날짜 매핑)
 def parse_kakao_text(file):
     text = file.read().decode('utf-8')
     lines = text.splitlines()
@@ -35,7 +32,6 @@ def parse_kakao_text(file):
 
     return pd.DataFrame(parsed)
 
-# 2. 키워드 기반 민원 메시지 필터링
 issue_keywords = ["배송", "지연", "누락", "불량", "부족", "정산", "반품", "추가", "오류"]
 
 def extract_issues(df):
@@ -45,12 +41,10 @@ def extract_issues(df):
     count = Counter(nouns)
     return issue_msgs, count.most_common(10)
 
-# 3. Google 뉴스 RSS 크롤링
-
 def crawl_google_news(query):
     url = f"https://news.google.com/rss/search?q={query}+교과서&hl=ko&gl=KR&ceid=KR:ko"
     res = requests.get(url)
-    soup = BeautifulSoup(res.content, 'html.parser')  # html.parser로 수정
+    soup = BeautifulSoup(res.content, 'html.parser')
     items = soup.find_all('item')
     results = []
     seen_titles = set()
@@ -73,10 +67,8 @@ def crawl_google_news(query):
             break
     return results
 
-
-# 4. Streamlit 인터페이스
 st.title("📚 EduIssue Radar")
-st.markdown("교과서 민원 메시지 + 구글 뉴스 통합 분석기")
+st.markdown("교과서 민원 메시지 + 뉴스 키워드 통합 분석기")
 
 uploaded_file = st.file_uploader("카카오톡 채팅 .txt 파일을 업로드하세요", type="txt")
 
@@ -112,7 +104,8 @@ if uploaded_file:
             with st.expander(f"🔎 {word} 관련 뉴스"):
                 articles = crawl_google_news(word)
                 for article in articles:
-                    st.markdown(f'<a href="{article["링크"]}" target="_blank">🔗 {article["제목"]}</a> ({article["날짜"]})', unsafe_allow_html=True)
+                    st.markdown(f"**{article['제목']}** ({article['날짜']})")
+                    st.link_button("🔗 뉴스 보러가기", url=article["링크"])
 
     with col2:
         st.markdown("### 📚 주제별 추천 뉴스")
@@ -121,4 +114,5 @@ if uploaded_file:
             with st.expander(f"📘 {topic} 관련 뉴스"):
                 articles = crawl_google_news(topic)
                 for article in articles:
-                    st.markdown(f'<a href="{article["링크"]}" target="_blank">🔗 {article["제목"]}</a> ({article["날짜"]})', unsafe_allow_html=True)
+                    st.markdown(f"**{article['제목']}** ({article['날짜']})")
+                    st.link_button("🔗 뉴스 보러가기", url=article["링크"])
