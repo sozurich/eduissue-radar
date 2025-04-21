@@ -119,32 +119,6 @@ if uploaded_file:
             st.write(f"- {word} ({freq}회)")
 
         emotion_df, top_emotion_keywords = extract_emotions(df_selected)
-        st.subheader("😥 감정 표현 감지")
-        st.write(emotion_df[['날짜', '시간', '사용자', '메시지']])
-        st.markdown("**감정 키워드 TOP10**")
-        
-    positive_words = ["좋아요", "감사", "도움", "잘됐", "다행"]
-    negative_words = ["멘붕", "어렵", "답답", "미치겠", "힘들"]
-
-    col_pos, col_neg = st.columns(2)
-    col_pos.markdown("**😊 긍정 표현 (예시)**")
-    for word in positive_words:
-        col_pos.write(f"- {word}")
-
-    col_neg.markdown("**😥 부정 표현 (예시)**")
-    for word in negative_words:
-        col_neg.write(f"- {word}")
-
-    st.markdown("**감정 키워드 TOP10**")
-    for i in range(0, len(top_emotion_keywords), 3):
-        cols = st.columns(3)
-        for j, (word, freq) in enumerate(top_emotion_keywords[i:i+3]):
-            if j < len(cols):
-                cols[j].markdown(f"- **{word}** ({freq}회)")
-    
-            st.write(f"- {word} ({freq}회)")
-
-    with tab2:
         st.subheader("📰 뉴스 요약")
         col1, col2 = st.columns(2)
 
