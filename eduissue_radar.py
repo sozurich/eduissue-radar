@@ -4,6 +4,7 @@ import pandas as pd
 import re
 from collections import Counter
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 import requests
 from bs4 import BeautifulSoup
 
@@ -34,6 +35,10 @@ def parse_kakao_text(file):
 
 issue_keywords = ["배송", "지연", "누락", "불량", "부족", "정산", "반품", "추가", "오류"]
 
+
+def extract_emotions(df):
+    return df[df['메시지'].str.contains('|'.join(['멘붕', '모르겠', '어렵', '답답', '복잡', '미치겠', '휴직', '힘들', '스트레스', '엉망']))]
+
 def extract_issues(df):
     issue_msgs = df[df['메시지'].str.contains('|'.join(issue_keywords))]
     all_words = ' '.join(issue_msgs['메시지'].tolist())
@@ -57,14 +62,19 @@ def crawl_google_news(query):
         soup_desc = BeautifulSoup(description_html, 'html.parser')
         link_tag = soup_desc.find('a')
         original_link = link_tag['href'] if link_tag else item.link.text
-        pub_date = item.pubDate.text if item.pubDate else '날짜 정보 없음'
+        if item.pubDate:
+            pub_date = parsedate_to_datetime(item.pubDate.text)
+            display_date = pub_date.strftime('%Y-%m-%d')
+        else:
+            pub_date = datetime.now()
+            display_date = "날짜 정보 없음"
         results.append({
             "제목": title,
             "링크": original_link,
-            "날짜": pub_date
+            "날짜": pub_date,
+            "표시날짜": display_date
         })
-        if len(results) >= 5:
-            break
+    results.sort(key=lambda x: x['날짜'], reverse=True)
     return results
 
 st.title("📚 EduIssue Radar")
@@ -95,6 +105,14 @@ if uploaded_file:
     for word, freq in top_keywords:
         st.write(f"- {word} ({freq}회)")
 
+    
+    st.subheader("😥 감정 표현 감지 (스트레스/혼란 등)")
+    emotion_df = extract_emotions(df_selected)
+    if not emotion_df.empty:
+        st.write(emotion_df[['날짜', '시간', '사용자', '메시지']])
+    else:
+        st.markdown("*감정 표현이 감지되지 않았습니다.*")
+
     st.subheader("📰 뉴스 요약")
     col1, col2 = st.columns(2)
 
@@ -104,7 +122,7 @@ if uploaded_file:
             with st.expander(f"🔎 {word} 관련 뉴스"):
                 articles = crawl_google_news(word)
                 for article in articles:
-                    st.markdown(f"**{article['제목']}** ({article['날짜']})")
+                    st.markdown(f"**{article['제목']}** ({article['표시날짜']})")
                     st.link_button("🔗 뉴스 보러가기", url=article["링크"])
 
     with col2:
@@ -114,5 +132,5 @@ if uploaded_file:
             with st.expander(f"📘 {topic} 관련 뉴스"):
                 articles = crawl_google_news(topic)
                 for article in articles:
-                    st.markdown(f"**{article['제목']}** ({article['날짜']})")
+                    st.markdown(f"**{article['제목']}** ({article['표시날짜']})")
                     st.link_button("🔗 뉴스 보러가기", url=article["링크"])
