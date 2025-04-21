@@ -59,7 +59,7 @@ def crawl_google_news(query):
             continue
         seen_titles.add(title)
         link = item.link.text
-        pub_date = item.pubDate.text
+        pub_date = item.pubDate.text if item.pubDate else '날짜 정보 없음'
         results.append({
             "제목": title,
             "링크": link,
