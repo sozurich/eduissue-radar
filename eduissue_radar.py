@@ -5,7 +5,7 @@ import re
 from collections import Counter
 from datetime import datetime
 import requests
-import openai
+from openai import OpenAI
 
 # 1. Kakao 텍스트 파싱
 def parse_kakao_text(file):
@@ -72,18 +72,19 @@ def crawl_naver_openapi(query):
         results.append({"제목": title, "링크": link, "날짜": pub, "표시날짜": pub.strftime('%Y-%m-%d')})
     return results
 
-# 4. GPT 요약 함수
+# 4. GPT 요약 함수 with new OpenAI client
 def summarize_with_gpt(messages):
-    openai.api_key = st.secrets.get("OPENAI_API_KEY")
-    if not openai.api_key:
+    api_key = st.secrets.get("OPENAI_API_KEY")
+    if not api_key:
         st.error("OPENAI_API_KEY를 Secrets에 설정해주세요.")
         return ""
+    client = OpenAI(api_key=api_key)
     prompt = (
         "아래는 교과서 관련 민원 메시지 대화입니다. 주요 이슈와 분위기를 "
         "3~4문장으로 요약해 주세요.\n\n"
         + "\n".join(messages)
     )
-    resp = openai.ChatCompletion.create(
+    resp = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[{"role":"user","content":prompt}],
         temperature=0.7,
