@@ -107,7 +107,7 @@ if uploaded_file:
             with st.expander(f"🔎 {word} 관련 뉴스"):
                 articles = crawl_google_news(word)
                 for article in articles:
-                    st.markdown(f"- [{article['제목']}]({article['링크']}) ({article['날짜']})")
+                    st.markdown(f'<a href="{article["링크"]}" target="_blank">🔗 {article["제목"]}</a> ({article["날짜"]})', unsafe_allow_html=True)
 
     with col2:
         st.markdown("### 📚 주제별 추천 뉴스")
@@ -116,4 +116,4 @@ if uploaded_file:
             with st.expander(f"📘 {topic} 관련 뉴스"):
                 articles = crawl_google_news(topic)
                 for article in articles:
-                    st.markdown(f"- [{article['제목']}]({article['링크']}) ({article['날짜']})")
+                    st.markdown(f'<a href="{article["링크"]}" target="_blank">🔗 {article["제목"]}</a> ({article["날짜"]})', unsafe_allow_html=True)
