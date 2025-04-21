@@ -108,14 +108,37 @@ if uploaded_file:
         st.subheader("🚨 민원 메시지 감지")
         st.write(issue_df[['날짜', '시간', '사용자', '메시지']])
         st.markdown("**민원 키워드 TOP10**")
-        for word, freq in top_issue_keywords:
+        
+    for i in range(0, len(top_issue_keywords), 3):
+        cols = st.columns(3)
+        for j, (word, freq) in enumerate(top_issue_keywords[i:i+3]):
+            cols[j].markdown(f"- **{word}** ({freq}회)")
+    
             st.write(f"- {word} ({freq}회)")
 
         emotion_df, top_emotion_keywords = extract_emotions(df_selected)
         st.subheader("😥 감정 표현 감지")
         st.write(emotion_df[['날짜', '시간', '사용자', '메시지']])
         st.markdown("**감정 키워드 TOP10**")
-        for word, freq in top_emotion_keywords:
+        
+    positive_words = ["좋아요", "감사", "도움", "잘됐", "다행"]
+    negative_words = ["멘붕", "어렵", "답답", "미치겠", "힘들"]
+
+    col_pos, col_neg = st.columns(2)
+    col_pos.markdown("**😊 긍정 표현 (예시)**")
+    for word in positive_words:
+        col_pos.write(f"- {word}")
+
+    col_neg.markdown("**😥 부정 표현 (예시)**")
+    for word in negative_words:
+        col_neg.write(f"- {word}")
+
+    st.markdown("**감정 키워드 TOP10**")
+    for i in range(0, len(top_emotion_keywords), 3):
+        cols = st.columns(3)
+        for j, (word, freq) in enumerate(top_emotion_keywords[i:i+3]):
+            cols[j].markdown(f"- **{word}** ({freq}회)")
+    
             st.write(f"- {word} ({freq}회)")
 
     with tab2:
@@ -127,7 +150,7 @@ if uploaded_file:
             for word, _ in top_issue_keywords[:3]:
                 with st.expander(f"🔎 {word} 관련 뉴스"):
                     articles = crawl_google_news(word)
-                    for article in articles:
+                    for article in articles[:5]:
                         st.markdown(f"**{article['제목']}** ({article['표시날짜']})")
                         st.link_button("🔗 뉴스 보러가기", url=article["링크"])
 
@@ -137,6 +160,6 @@ if uploaded_file:
             for topic in extra_topics:
                 with st.expander(f"📘 {topic} 관련 뉴스"):
                     articles = crawl_google_news(topic)
-                    for article in articles:
+                    for article in articles[:5]:
                         st.markdown(f"**{article['제목']}** ({article['표시날짜']})")
                         st.link_button("🔗 뉴스 보러가기", url=article["링크"])
