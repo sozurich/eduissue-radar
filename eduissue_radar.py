@@ -8,7 +8,6 @@ from email.utils import parsedate_to_datetime
 import requests
 from bs4 import BeautifulSoup
 
-# 1. 파싱 함수
 def parse_kakao_text(file):
     text = file.read().decode('utf-8')
     lines = text.splitlines()
@@ -31,7 +30,6 @@ def parse_kakao_text(file):
             parsed.append({"날짜": current_date, "사용자": user, "시간": timestamp, "메시지": msg})
     return pd.DataFrame(parsed)
 
-# 2. 민원 메시지 필터링
 issue_keywords = ["배송", "지연", "누락", "불량", "부족", "정산", "반품", "추가", "오류"]
 
 def extract_issues(df):
@@ -41,7 +39,6 @@ def extract_issues(df):
     count = Counter(nouns)
     return msgs, count.most_common(10)
 
-# 3. 뉴스 크롤링
 def crawl_google_news(query):
     url = f"https://news.google.com/rss/search?q={query}+교과서&hl=ko&gl=KR&ceid=KR:ko"
     res = requests.get(url)
@@ -68,7 +65,6 @@ def crawl_google_news(query):
     results.sort(key=lambda x: x['날짜'], reverse=True)
     return results
 
-# 4. 기사 렌더링 함수
 def render_articles(articles):
     if not articles:
         st.markdown("뉴스가 없습니다.")
@@ -78,7 +74,6 @@ def render_articles(articles):
                 st.markdown(f"**{article['제목']}** ({article['표시날짜']})")
                 st.link_button("🔗 뉴스 보러가기", url=article["링크"])
 
-# 5. Streamlit UI
 st.title("📚 EduIssue Radar")
 st.markdown("교과서 민원 메시지 + 최신 뉴스 요약 분석기")
 
@@ -112,15 +107,17 @@ if uploaded:
         st.subheader("📰 최신 뉴스 (최근 7일)")
         threshold = datetime.now() - timedelta(days=7)
         # 연관 뉴스
-        extra_topics = [kw for kw, _ in extract_issues(df_sel)[1][:3]]
+        extra_topics = [kw for kw, _ in top_issues[:3]]
         for word in extra_topics:
-            with st.expander(f"🔎 {word} 관련 최신 뉴스"):
-                arts = [a for a in crawl_google_news(word) if a['날짜'] >= threshold]
-                render_articles(arts)
+            arts = [a for a in crawl_google_news(word) if a['날짜'] >= threshold]
+            if arts:
+                with st.expander(f"🔎 {word} 관련 최신 뉴스"):
+                    render_articles(arts)
         # 주제별 추천
         st.markdown("### 📚 주제별 최신 뉴스 (최근 7일)")
         topics = ["교과서", "AI 디지털교과서", "비상교육", "천재교육", "천재교과서", "미래엔", "아이스크림미디어", "동아출판", "지학사"]
         for topic in topics:
-            with st.expander(f"📘 {topic} 관련 최신 뉴스"):
-                arts = [a for a in crawl_google_news(topic) if a['날짜'] >= threshold]
-                render_articles(arts)
+            arts = [a for a in crawl_google_news(topic) if a['날짜'] >= threshold]
+            if arts:
+                with st.expander(f"📘 {topic} 관련 최신 뉴스"):
+                    render_articles(arts)
