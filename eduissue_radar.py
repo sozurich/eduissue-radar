@@ -1,5 +1,4 @@
-
-# EduIssue Radar - Streamlit 앱 (기간 분석 기능 포함)
+# EduIssue Radar - Streamlit 앱 (Daum 뉴스 기반)
 
 import streamlit as st
 import pandas as pd
@@ -45,24 +44,29 @@ def extract_issues(df):
     count = Counter(nouns)
     return issue_msgs, count.most_common(10)
 
-# 3. 뉴스 크롤러 함수 (네이버 뉴스 검색)
+# 3. Daum 뉴스 크롤링 함수
 def crawl_news(query):
     headers = {"User-Agent": "Mozilla/5.0"}
-    url = f"https://search.naver.com/search.naver?where=news&query={query}"
+    url = f"https://search.daum.net/search?w=news&q={query}"
     res = requests.get(url, headers=headers)
+
+    if res.status_code != 200:
+        return []
+
     soup = BeautifulSoup(res.text, 'html.parser')
-    news_items = soup.select(".list_news .news_area")
+    items = soup.select(".coll_cont .wrap_cont")
     seen_titles = set()
     results = []
-    for item in news_items:
-        title_tag = item.select_one(".news_tit")
+
+    for item in items:
+        title_tag = item.select_one("a.f_link_b")
         if title_tag:
             title = title_tag.text.strip()
             if title in seen_titles:
                 continue
             seen_titles.add(title)
             link = title_tag['href']
-            press = item.select_one(".info_group span").text if item.select_one(".info_group span") else "언론사 미확인"
+            press = item.select_one(".info_news .f_nb").text if item.select_one(".info_news .f_nb") else "언론사 미확인"
             results.append({"제목": title, "링크": link, "언론사": press})
         if len(results) >= 5:
             break
