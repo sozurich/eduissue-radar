@@ -3,11 +3,9 @@ import streamlit as st
 import pandas as pd
 import re
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime
 import requests
-import os
 
-# 1. Parse Kakao text
 def parse_kakao_text(file):
     text = file.read().decode('utf-8')
     lines = text.splitlines()
@@ -30,7 +28,6 @@ def parse_kakao_text(file):
             parsed.append({"날짜": current_date, "사용자": user, "시간": timestamp, "메시지": msg})
     return pd.DataFrame(parsed)
 
-# 2. Extract issues
 issue_keywords = ["배송","지연","누락","불량","부족","정산","반품","추가","오류"]
 def extract_issues(df):
     msgs = df[df['메시지'].str.contains('|'.join(issue_keywords))]
@@ -39,10 +36,9 @@ def extract_issues(df):
     cnt = Counter(nouns)
     return msgs, cnt.most_common(10)
 
-# 3. Crawl news via Naver OpenAPI
 def crawl_naver_openapi(query):
-    client_id = st.secrets.get("NAVER_CLIENT_ID")
-    client_secret = st.secrets.get("NAVER_CLIENT_SECRET")
+    client_id = st.secrets["NAVER_CLIENT_ID"]
+    client_secret = st.secrets["NAVER_CLIENT_SECRET"]
     headers = {
         "X-Naver-Client-Id": client_id,
         "X-Naver-Client-Secret": client_secret
@@ -56,13 +52,12 @@ def crawl_naver_openapi(query):
     if res.status_code != 200:
         st.error(f"네이버 API 호출 오류: {res.status_code}")
         return []
-    data = res.json()
-    items = data.get("items", [])
+    data = res.json().get("items", [])
     results = []
-    for it in items:
-        title = it.get("title").replace("<b>", "").replace("</b>", "")
+    for it in data:
+        title = it.get("title", "").replace("<b>", "").replace("</b>", "")
         link = it.get("originallink") or it.get("link")
-        date_str = it.get("pubDate")  # e.g., 'Tue, 21 Apr 2025 10:00:00 +0900'
+        date_str = it.get("pubDate", "")
         try:
             pub = datetime.strptime(date_str, '%a, %d %b %Y %H:%M:%S %z')
         except:
@@ -70,7 +65,6 @@ def crawl_naver_openapi(query):
         results.append({"제목": title, "링크": link, "날짜": pub, "표시날짜": pub.strftime('%Y-%m-%d')})
     return results
 
-# 4. Render articles
 def render_articles(articles):
     if not articles:
         st.markdown("뉴스가 없습니다.")
@@ -80,7 +74,6 @@ def render_articles(articles):
                 st.markdown(f"**{art['제목']}** ({art['표시날짜']})")
                 st.link_button("🔗 뉴스 보러가기", url=art["링크"])
 
-# 5. UI
 st.title("📚 EduIssue Radar")
 st.markdown("교과서 민원 메시지 + 네이버 OpenAPI 뉴스 요약")
 
@@ -110,7 +103,8 @@ if uploaded:
                 cols[j].markdown(f"- **{kw}** ({cnt}회)")
     with tab2:
         st.subheader("📰 연관 뉴스")
-        topics = [kw for kw,_ in iss_df or extract_issues(df_sel)[1][:3]]
+        _, top_issues = extract_issues(df_sel)
+        topics = [kw for kw,_ in top_issues[:3]]
         for t in topics:
             arts = crawl_naver_openapi(t)
             with st.expander(f"🔎 {t} 관련 뉴스"):
