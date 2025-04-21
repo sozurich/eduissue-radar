@@ -111,7 +111,9 @@ if uploaded_file:
         
     for i in range(0, len(top_issue_keywords), 3):
         cols = st.columns(3)
-        for j, (word, freq) in enumerate(top_issue_keywords[i:i+3]):
+        row_items = top_issue_keywords[i:i+3]
+        for j in range(len(row_items)):
+            word, freq = row_items[j]
             cols[j].markdown(f"- **{word}** ({freq}회)")
     
             st.write(f"- {word} ({freq}회)")
@@ -137,7 +139,8 @@ if uploaded_file:
     for i in range(0, len(top_emotion_keywords), 3):
         cols = st.columns(3)
         for j, (word, freq) in enumerate(top_emotion_keywords[i:i+3]):
-            cols[j].markdown(f"- **{word}** ({freq}회)")
+            if j < len(cols):
+                cols[j].markdown(f"- **{word}** ({freq}회)")
     
             st.write(f"- {word} ({freq}회)")
 
