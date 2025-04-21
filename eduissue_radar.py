@@ -34,10 +34,7 @@ def parse_kakao_text(file):
     return pd.DataFrame(parsed)
 
 issue_keywords = ["배송", "지연", "누락", "불량", "부족", "정산", "반품", "추가", "오류"]
-
-
-def extract_emotions(df):
-    return df[df['메시지'].str.contains('|'.join(['멘붕', '모르겠', '어렵', '답답', '복잡', '미치겠', '휴직', '힘들', '스트레스', '엉망']))]
+emotion_keywords = ["멘붕", "모르겠", "어렵", "답답", "복잡", "미치겠", "휴직", "힘들", "스트레스", "엉망"]
 
 def extract_issues(df):
     issue_msgs = df[df['메시지'].str.contains('|'.join(issue_keywords))]
@@ -45,6 +42,13 @@ def extract_issues(df):
     nouns = re.findall(r'[\uAC00-\uD7A3]+', all_words)
     count = Counter(nouns)
     return issue_msgs, count.most_common(10)
+
+def extract_emotions(df):
+    emotion_msgs = df[df['메시지'].str.contains('|'.join(emotion_keywords))]
+    all_words = ' '.join(emotion_msgs['메시지'].tolist())
+    nouns = re.findall(r'[\uAC00-\uD7A3]+', all_words)
+    count = Counter(nouns)
+    return emotion_msgs, count.most_common(10)
 
 def crawl_google_news(query):
     url = f"https://news.google.com/rss/search?q={query}+교과서&hl=ko&gl=KR&ceid=KR:ko"
@@ -78,7 +82,7 @@ def crawl_google_news(query):
     return results
 
 st.title("📚 EduIssue Radar")
-st.markdown("교과서 민원 메시지 + 뉴스 키워드 통합 분석기")
+st.markdown("교과서 민원 메시지 + 감정 감지 + 뉴스 요약 분석기")
 
 uploaded_file = st.file_uploader("카카오톡 채팅 .txt 파일을 업로드하세요", type="txt")
 
@@ -95,42 +99,44 @@ if uploaded_file:
 
     df_selected = df[(df['날짜'] >= pd.to_datetime(start_date)) & (df['날짜'] <= pd.to_datetime(end_date))]
 
-    st.success(f"{start_date} ~ {end_date} 기간의 메시지 {len(df_selected)}건 분석 중...")
+    tab1, tab2 = st.tabs(["📊 민원 및 감정 분석", "📰 뉴스 요약"])
 
-    issue_df, top_keywords = extract_issues(df_selected)
-    st.subheader("🔍 민원 메시지 요약")
-    st.write(issue_df[['날짜', '시간', '사용자', '메시지']])
+    with tab1:
+        st.success(f"{start_date} ~ {end_date} 기간의 메시지 {len(df_selected)}건 분석 중...")
 
-    st.subheader("🔥 자주 언급된 키워드")
-    for word, freq in top_keywords:
-        st.write(f"- {word} ({freq}회)")
+        issue_df, top_issue_keywords = extract_issues(df_selected)
+        st.subheader("🚨 민원 메시지 감지")
+        st.write(issue_df[['날짜', '시간', '사용자', '메시지']])
+        st.markdown("**민원 키워드 TOP10**")
+        for word, freq in top_issue_keywords:
+            st.write(f"- {word} ({freq}회)")
 
-    
-    st.subheader("😥 감정 표현 감지 (스트레스/혼란 등)")
-    emotion_df = extract_emotions(df_selected)
-    if not emotion_df.empty:
+        emotion_df, top_emotion_keywords = extract_emotions(df_selected)
+        st.subheader("😥 감정 표현 감지")
         st.write(emotion_df[['날짜', '시간', '사용자', '메시지']])
-    else:
-        st.markdown("*감정 표현이 감지되지 않았습니다.*")
+        st.markdown("**감정 키워드 TOP10**")
+        for word, freq in top_emotion_keywords:
+            st.write(f"- {word} ({freq}회)")
 
-    st.subheader("📰 뉴스 요약")
-    col1, col2 = st.columns(2)
+    with tab2:
+        st.subheader("📰 뉴스 요약")
+        col1, col2 = st.columns(2)
 
-    with col1:
-        st.markdown("### 📌 연관 뉴스 기사")
-        for word, _ in top_keywords[:3]:
-            with st.expander(f"🔎 {word} 관련 뉴스"):
-                articles = crawl_google_news(word)
-                for article in articles:
-                    st.markdown(f"**{article['제목']}** ({article['표시날짜']})")
-                    st.link_button("🔗 뉴스 보러가기", url=article["링크"])
+        with col1:
+            st.markdown("### 📌 연관 뉴스 기사")
+            for word, _ in top_issue_keywords[:3]:
+                with st.expander(f"🔎 {word} 관련 뉴스"):
+                    articles = crawl_google_news(word)
+                    for article in articles:
+                        st.markdown(f"**{article['제목']}** ({article['표시날짜']})")
+                        st.link_button("🔗 뉴스 보러가기", url=article["링크"])
 
-    with col2:
-        st.markdown("### 📚 주제별 추천 뉴스")
-        extra_topics = ["교과서", "AI 디지털교과서", "비상교육", "천재교육", "천재교과서", "미래엔", "아이스크림미디어", "동아출판", "지학사"]
-        for topic in extra_topics:
-            with st.expander(f"📘 {topic} 관련 뉴스"):
-                articles = crawl_google_news(topic)
-                for article in articles:
-                    st.markdown(f"**{article['제목']}** ({article['표시날짜']})")
-                    st.link_button("🔗 뉴스 보러가기", url=article["링크"])
+        with col2:
+            st.markdown("### 📚 주제별 추천 뉴스")
+            extra_topics = ["교과서", "AI 디지털교과서", "비상교육", "천재교육", "천재교과서", "미래엔", "아이스크림미디어", "동아출판", "지학사"]
+            for topic in extra_topics:
+                with st.expander(f"📘 {topic} 관련 뉴스"):
+                    articles = crawl_google_news(topic)
+                    for article in articles:
+                        st.markdown(f"**{article['제목']}** ({article['표시날짜']})")
+                        st.link_button("🔗 뉴스 보러가기", url=article["링크"])
