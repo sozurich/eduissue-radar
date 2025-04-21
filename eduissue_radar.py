@@ -37,8 +37,11 @@ def extract_issues(df):
     return msgs, cnt.most_common(10)
 
 def crawl_naver_openapi(query):
-    client_id = st.secrets["NAVER_CLIENT_ID"]
-    client_secret = st.secrets["NAVER_CLIENT_SECRET"]
+    client_id = st.secrets.get("NAVER_CLIENT_ID", None)
+    client_secret = st.secrets.get("NAVER_CLIENT_SECRET", None)
+    if not client_id or not client_secret:
+        st.error("NAVER_CLIENT_ID 및 NAVER_CLIENT_SECRET을 Secrets에 설정해주세요.")
+        return []
     headers = {
         "X-Naver-Client-Id": client_id,
         "X-Naver-Client-Secret": client_secret
