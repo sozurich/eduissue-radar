@@ -46,10 +46,11 @@ def extract_issues(df):
     return issue_msgs, count.most_common(10)
 
 # 3. Google 뉴스 RSS 크롤링
+
 def crawl_google_news(query):
     url = f"https://news.google.com/rss/search?q={query}+교과서&hl=ko&gl=KR&ceid=KR:ko"
     res = requests.get(url)
-    soup = BeautifulSoup(res.content, 'html.parser')
+    soup = BeautifulSoup(res.content, 'html.parser')  # html.parser로 수정
     items = soup.find_all('item')
     results = []
     seen_titles = set()
@@ -58,16 +59,20 @@ def crawl_google_news(query):
         if title in seen_titles:
             continue
         seen_titles.add(title)
-        link = item.link.text
+        description_html = item.description.text
+        soup_desc = BeautifulSoup(description_html, 'html.parser')
+        link_tag = soup_desc.find('a')
+        original_link = link_tag['href'] if link_tag else item.link.text
         pub_date = item.pubDate.text if item.pubDate else '날짜 정보 없음'
         results.append({
             "제목": title,
-            "링크": link,
+            "링크": original_link,
             "날짜": pub_date
         })
         if len(results) >= 5:
             break
     return results
+
 
 # 4. Streamlit 인터페이스
 st.title("📚 EduIssue Radar")
