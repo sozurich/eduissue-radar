@@ -37,25 +37,40 @@ def extract_issues(df):
     count = Counter(nouns)
     return msgs, count.most_common(10)
 
-def crawl_naver_rss(query):
-    rss_url = f"https://newssearch.naver.com/search.naver?where=rss&query={query}"
-    res = requests.get(rss_url)
+def crawl_naver_news(query):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Accept-Language": "ko-KR,ko;q=0.9",
+        "Accept": "text/html,application/xhtml+xml"
+    }
+    url = f"https://search.naver.com/search.naver?where=news&query={query}"
+    res = requests.get(url, headers=headers)
     if res.status_code != 200:
         return []
-    soup = BeautifulSoup(res.content, 'xml')
-    items = soup.find_all('item')
+    soup = BeautifulSoup(res.text, 'html.parser')
+    items = soup.select('ul.list_news > li')
     results = []
+    seen = set()
     for item in items:
-        title = item.title.text
-        link = item.link.text
-        pub_date_raw = item.pubDate.text if item.pubDate else ''
+        a_tag = item.find('a', class_='news_tit')
+        if not a_tag:
+            continue
+        title = a_tag.get_text(strip=True)
+        if title in seen:
+            continue
+        seen.add(title)
+        link = a_tag['href']
+        press_tag = item.find('a', class_='info press')
+        press = press_tag.get_text(strip=True) if press_tag else ''
+        date_tag = item.find('span', class_='info')
+        date_text = date_tag.get_text(strip=True) if date_tag else ''
         try:
-            pub_date = datetime.strptime(pub_date_raw, '%a, %d %b %Y %H:%M:%S %z')
+            pub_date = datetime.strptime(date_text, "%Y.%m.%d. %H:%M")
             display_date = pub_date.strftime('%Y-%m-%d')
         except:
             pub_date = datetime.now()
-            display_date = pub_date_raw or '날짜 정보 없음'
-        results.append({"제목": title, "링크": link, "날짜": pub_date, "표시날짜": display_date})
+            display_date = date_text or '날짜 정보 없음'
+        results.append({"제목": title, "링크": link, "언론사": press, "날짜": pub_date, "표시날짜": display_date})
     results.sort(key=lambda x: x['날짜'], reverse=True)
     return results
 
@@ -65,11 +80,11 @@ def render_articles(articles):
     else:
         for article in articles[:5]:
             with st.container():
-                st.markdown(f"**{article['제목']}** ({article['표시날짜']})")
-                st.link_button("🔗 뉴스 보러가기", url=article['링크'])
+                st.markdown(f"**{article['제목']}** <{article['언론사']}> ({article['표시날짜']})")
+                st.link_button("🔗 뉴스 보러가기", url=article["링크"])
 
 st.title("📚 EduIssue Radar")
-st.markdown("교과서 민원 메시지 + 최신 네이버 RSS 뉴스 (최근 7일)")
+st.markdown("교과서 민원 메시지 + 최신 네이버 뉴스 (최근 7일) 분석기")
 
 uploaded = st.file_uploader("카카오톡 채팅 .txt 파일 업로드", type="txt")
 if uploaded:
@@ -84,7 +99,7 @@ if uploaded:
     start_d, end_d = st.date_input("분석 기간 선택", [min_d, max_d])
     df_sel = df[(df['날짜'] >= pd.to_datetime(start_d)) & (df['날짜'] <= pd.to_datetime(end_d))]
 
-    tab1, tab2 = st.tabs(["📊 민원 분석", "📰 최신 네이버 RSS 뉴스"])
+    tab1, tab2 = st.tabs(["📊 민원 분석", "📰 최신 네이버 뉴스"])
 
     with tab1:
         st.success(f"{start_d} ~ {end_d} 메시지 {len(df_sel)}건 분석")
@@ -98,20 +113,20 @@ if uploaded:
                 cols[j].markdown(f"- **{kw}** ({cnt}회)")
 
     with tab2:
-        st.subheader("📰 최신 네이버 RSS 뉴스 (최근 7일)")
+        st.subheader("📰 연관 뉴스 (최근 7일)")
         threshold = datetime.now() - timedelta(days=7)
         _, top_issues = extract_issues(df_sel)
         extra_topics = [kw for kw, _ in top_issues[:3]]
         for word in extra_topics:
-            arts = [a for a in crawl_naver_rss(word) if a['날짜'] >= threshold]
+            arts = [a for a in crawl_naver_news(word) if a['날짜'] >= threshold]
             if arts:
                 with st.expander(f"🔎 {word} 관련 뉴스"):
                     render_articles(arts)
 
-        st.markdown("### 📚 주제별 최신 뉴스")
+        st.markdown("📚 주제별 최신 뉴스 (최근 7일)")
         topics = ["교과서", "AI 디지털교과서", "비상교육", "천재교육", "천재교과서", "미래엔", "아이스크림미디어", "동아출판", "지학사"]
         for topic in topics:
-            arts = [a for a in crawl_naver_rss(topic) if a['날짜'] >= threshold]
+            arts = [a for a in crawl_naver_news(topic) if a['날짜'] >= threshold]
             if arts:
                 with st.expander(f"📘 {topic} 관련 뉴스"):
                     render_articles(arts)
