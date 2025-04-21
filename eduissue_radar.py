@@ -132,8 +132,9 @@ if not articles:
     st.markdown("뉴스가 없습니다.")
 else:
     for article in articles[:5]:
-        st.container().markdown(f"**{article['제목']}** ({article['표시날짜']})")
-        st.link_button("🔗 뉴스 보러가기", url=article["링크"])
+        with st.container():
+            st.markdown(f"**{article['제목']}** ({article['표시날짜']})")
+            st.link_button("🔗 뉴스 보러가기", url=article["링크"])
 
                         st.markdown(f"**{article['제목']}** ({article['표시날짜']})")
                         st.link_button("🔗 뉴스 보러가기", url=article["링크"])
@@ -149,8 +150,9 @@ if not articles:
     st.markdown("뉴스가 없습니다.")
 else:
     for article in articles[:5]:
-        st.container().markdown(f"**{article['제목']}** ({article['표시날짜']})")
-        st.link_button("🔗 뉴스 보러가기", url=article["링크"])
+        with st.container():
+            st.markdown(f"**{article['제목']}** ({article['표시날짜']})")
+            st.link_button("🔗 뉴스 보러가기", url=article["링크"])
 
                         st.markdown(f"**{article['제목']}** ({article['표시날짜']})")
                         st.link_button("🔗 뉴스 보러가기", url=article["링크"])
