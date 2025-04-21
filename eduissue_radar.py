@@ -37,27 +37,27 @@ def extract_issues(df):
     return msgs, cnt.most_common(10)
 
 def crawl_naver_openapi(query):
-    client_id = st.secrets.get("NAVER_CLIENT_ID", None)
-    client_secret = st.secrets.get("NAVER_CLIENT_SECRET", None)
+    client_id = st.secrets.get("NAVER_CLIENT_ID")
+    client_secret = st.secrets.get("NAVER_CLIENT_SECRET")
     if not client_id or not client_secret:
-        st.error("NAVER_CLIENT_ID 및 NAVER_CLIENT_SECRET을 Secrets에 설정해주세요.")
+        st.error("NAVER API 키를 설정하세요")
         return []
     headers = {
         "X-Naver-Client-Id": client_id,
         "X-Naver-Client-Secret": client_secret
     }
     params = {
-        "query": query + " 교과서",
+        "query": query,
         "display": 5,
         "sort": "date"
     }
     res = requests.get("https://openapi.naver.com/v1/search/news.json", headers=headers, params=params)
     if res.status_code != 200:
-        st.error(f"네이버 API 호출 오류: {res.status_code}")
+        st.error(f"네이버 API 오류: {res.status_code}")
         return []
-    data = res.json().get("items", [])
+    items = res.json().get("items", [])
     results = []
-    for it in data:
+    for it in items:
         title = it.get("title", "").replace("<b>", "").replace("</b>", "")
         link = it.get("originallink") or it.get("link")
         date_str = it.get("pubDate", "")
@@ -93,7 +93,7 @@ if uploaded:
     sd, ed = st.date_input("분석 기간 선택", [min_d, max_d])
     df_sel = df[(df['날짜'] >= pd.to_datetime(sd)) & (df['날짜'] <= pd.to_datetime(ed))]
 
-    tab1, tab2 = st.tabs(["📊 민원 분석", "📰 뉴스 요약"])
+    tab1, tab2 = st.tabs(["📊 민원 분석", "📰 키워드 뉴스"])
     with tab1:
         st.success(f"{sd} ~ {ed} 메시지 {len(df_sel)}건 분석")
         iss_df, top = extract_issues(df_sel)
@@ -107,8 +107,16 @@ if uploaded:
     with tab2:
         st.subheader("📰 연관 뉴스")
         _, top_issues = extract_issues(df_sel)
-        topics = [kw for kw,_ in top_issues[:3]]
-        for t in topics:
+        related = [kw for kw,_ in top_issues[:3]]
+        for t in related:
             arts = crawl_naver_openapi(t)
             with st.expander(f"🔎 {t} 관련 뉴스"):
+                render_articles(arts)
+
+        st.markdown("### 📚 주제별 추천 뉴스")
+        extra_topics = ["교과서", "AI 디지털교과서", "비상교육", "천재교육", "천재교과서", 
+                        "미래엔", "아이스크림미디어", "동아출판", "지학사"]
+        for topic in extra_topics:
+            arts = crawl_naver_openapi(topic)
+            with st.expander(f"📘 {topic} 관련 뉴스"):
                 render_articles(arts)
