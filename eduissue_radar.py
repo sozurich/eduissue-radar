@@ -1,5 +1,5 @@
 
-# EduIssue Radar - Streamlit 앱 (Daum 뉴스 기반)
+# EduIssue Radar - Google 뉴스 RSS 기반
 
 import streamlit as st
 import pandas as pd
@@ -45,37 +45,33 @@ def extract_issues(df):
     count = Counter(nouns)
     return issue_msgs, count.most_common(10)
 
-# 3. Daum 뉴스 크롤링 함수
-def crawl_news(query):
-    headers = {"User-Agent": "Mozilla/5.0"}
-    url = f"https://search.daum.net/search?w=news&q={query}"
-    res = requests.get(url, headers=headers)
-
-    if res.status_code != 200:
-        return []
-
-    soup = BeautifulSoup(res.text, 'html.parser')
-    items = soup.select(".coll_cont .wrap_cont")
-    seen_titles = set()
+# 3. Google 뉴스 RSS 크롤링
+def crawl_google_news(query):
+    url = f"https://news.google.com/rss/search?q={query}+교과서&hl=ko&gl=KR&ceid=KR:ko"
+    res = requests.get(url)
+    soup = BeautifulSoup(res.content, 'xml')
+    items = soup.find_all('item')
     results = []
-
+    seen_titles = set()
     for item in items:
-        title_tag = item.select_one("a.f_link_b")
-        if title_tag:
-            title = title_tag.text.strip()
-            if title in seen_titles:
-                continue
-            seen_titles.add(title)
-            link = title_tag['href']
-            press = item.select_one(".info_news .f_nb").text if item.select_one(".info_news .f_nb") else "언론사 미확인"
-            results.append({"제목": title, "링크": link, "언론사": press})
+        title = item.title.text
+        if title in seen_titles:
+            continue
+        seen_titles.add(title)
+        link = item.link.text
+        pub_date = item.pubDate.text
+        results.append({
+            "제목": title,
+            "링크": link,
+            "날짜": pub_date
+        })
         if len(results) >= 5:
             break
     return results
 
 # 4. Streamlit 인터페이스
 st.title("📚 EduIssue Radar")
-st.markdown("교과서 민원 메시지 + 뉴스 키워드 통합 분석기")
+st.markdown("교과서 민원 메시지 + 구글 뉴스 통합 분석기")
 
 uploaded_file = st.file_uploader("카카오톡 채팅 .txt 파일을 업로드하세요", type="txt")
 
@@ -109,15 +105,15 @@ if uploaded_file:
         st.markdown("### 📌 연관 뉴스 기사")
         for word, _ in top_keywords[:3]:
             with st.expander(f"🔎 {word} 관련 뉴스"):
-                articles = crawl_news(word + " 교과서")
+                articles = crawl_google_news(word)
                 for article in articles:
-                    st.markdown(f"- [{article['제목']}]({article['링크']}) <{article['언론사']}>")
+                    st.markdown(f"- [{article['제목']}]({article['링크']}) ({article['날짜']})")
 
     with col2:
         st.markdown("### 📚 주제별 추천 뉴스")
         extra_topics = ["교과서", "AI 디지털교과서", "비상교육", "천재교육", "천재교과서", "미래엔", "아이스크림미디어", "동아출판", "지학사"]
         for topic in extra_topics:
             with st.expander(f"📘 {topic} 관련 뉴스"):
-                articles = crawl_news(topic)
+                articles = crawl_google_news(topic)
                 for article in articles:
-                    st.markdown(f"- [{article['제목']}]({article['링크']}) <{article['언론사']}>")
+                    st.markdown(f"- [{article['제목']}]({article['링크']}) ({article['날짜']})")
