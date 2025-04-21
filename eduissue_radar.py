@@ -4,10 +4,10 @@ import pandas as pd
 import re
 from collections import Counter
 from datetime import datetime, timedelta
-from email.utils import parsedate_to_datetime
 import requests
 from bs4 import BeautifulSoup
 
+# 1. Kakao text parsing
 def parse_kakao_text(file):
     text = file.read().decode('utf-8')
     lines = text.splitlines()
@@ -30,8 +30,8 @@ def parse_kakao_text(file):
             parsed.append({"날짜": current_date, "사용자": user, "시간": timestamp, "메시지": msg})
     return pd.DataFrame(parsed)
 
+# 2. Issue extraction
 issue_keywords = ["배송", "지연", "누락", "불량", "부족", "정산", "반품", "추가", "오류"]
-
 def extract_issues(df):
     msgs = df[df['메시지'].str.contains('|'.join(issue_keywords))]
     all_words = ' '.join(msgs['메시지'].tolist())
@@ -39,43 +39,53 @@ def extract_issues(df):
     count = Counter(nouns)
     return msgs, count.most_common(10)
 
-def crawl_google_news(query):
-    url = f"https://news.google.com/rss/search?q={query}+교과서&hl=ko&gl=KR&ceid=KR:ko"
-    res = requests.get(url)
-    soup = BeautifulSoup(res.content, 'html.parser')
-    items = soup.find_all('item')
+# 3. Naver news crawler
+def crawl_naver_news(query):
+    headers = {"User-Agent": "Mozilla/5.0"}
+    url = f"https://search.naver.com/search.naver?where=news&query={query}"
+    res = requests.get(url, headers=headers)
+    if res.status_code != 200:
+        return []
+    soup = BeautifulSoup(res.text, 'html.parser')
+    items = soup.select('.list_news .news_area')
     results = []
     seen = set()
     for item in items:
-        title = item.title.text
+        title_tag = item.select_one('.news_tit')
+        if not title_tag:
+            continue
+        title = title_tag.text.strip()
         if title in seen:
             continue
         seen.add(title)
-        desc_html = item.description.text
-        soup_desc = BeautifulSoup(desc_html, 'html.parser')
-        link_tag = soup_desc.find('a')
-        link = link_tag['href'] if link_tag else item.link.text
-        if item.pubDate:
-            pub_date = parsedate_to_datetime(item.pubDate.text)
+        link = title_tag['href']
+        press_tag = item.select_one('.info_group span.press')
+        press = press_tag.text if press_tag else ''
+        date_tag = item.select_one('.info_group span.date')
+        date_text = date_tag.text if date_tag else ''
+        try:
+            pub_date = datetime.strptime(date_text, "%Y.%m.%d. %H:%M")
             display_date = pub_date.strftime('%Y-%m-%d')
-        else:
+        except:
             pub_date = datetime.now()
-            display_date = "날짜 정보 없음"
-        results.append({"제목": title, "링크": link, "날짜": pub_date, "표시날짜": display_date})
+            display_date = date_text or '날짜 정보 없음'
+        results.append({"제목": title, "링크": link, "언론사": press, "날짜": pub_date, "표시날짜": display_date})
     results.sort(key=lambda x: x['날짜'], reverse=True)
     return results
 
+# 4. Render articles
 def render_articles(articles):
     if not articles:
         st.markdown("뉴스가 없습니다.")
     else:
         for article in articles[:5]:
             with st.container():
-                st.markdown(f"**{article['제목']}** ({article['표시날짜']})")
+                st.markdown(f"**{article['제목']}** <{article['언론사']}> ({article['표시날짜']})")
                 st.link_button("🔗 뉴스 보러가기", url=article["링크"])
 
+# 5. Streamlit UI
 st.title("📚 EduIssue Radar")
-st.markdown("교과서 민원 메시지 + 최신 뉴스 요약 분석기")
+st.markdown("교과서 민원 메시지 + 최신 네이버 뉴스 분석기")
 
 uploaded = st.file_uploader("카카오톡 채팅 .txt 파일 업로드", type="txt")
 if uploaded:
@@ -90,7 +100,7 @@ if uploaded:
     start_d, end_d = st.date_input("분석 기간 선택", [min_d, max_d])
     df_sel = df[(df['날짜'] >= pd.to_datetime(start_d)) & (df['날짜'] <= pd.to_datetime(end_d))]
 
-    tab1, tab2 = st.tabs(["📊 민원 분석", "📰 최신 뉴스 요약"])
+    tab1, tab2 = st.tabs(["📊 민원 분석", "📰 최신 네이버 뉴스 (최근 7일)"])
 
     with tab1:
         st.success(f"{start_d} ~ {end_d} 메시지 {len(df_sel)}건 분석")
@@ -104,20 +114,18 @@ if uploaded:
                 cols[j].markdown(f"- **{kw}** ({cnt}회)")
 
     with tab2:
-        st.subheader("📰 최신 뉴스 (최근 7일)")
+        st.subheader("📰 최신 네이버 뉴스 (최근 7일)")
         threshold = datetime.now() - timedelta(days=7)
-        # 연관 뉴스
-        extra_topics = [kw for kw, _ in top_issues[:3]]
+        extra_topics = [kw for kw, _ in extract_issues(df_sel)[1][:3]]
         for word in extra_topics:
-            arts = [a for a in crawl_google_news(word) if a['날짜'] >= threshold]
+            arts = [a for a in crawl_naver_news(word) if a['날짜'] >= threshold]
             if arts:
-                with st.expander(f"🔎 {word} 관련 최신 뉴스"):
+                with st.expander(f"🔎 {word} 관련 뉴스"):
                     render_articles(arts)
-        # 주제별 추천
-        st.markdown("### 📚 주제별 최신 뉴스 (최근 7일)")
+        st.markdown("### 📚 주제별 최신 뉴스")
         topics = ["교과서", "AI 디지털교과서", "비상교육", "천재교육", "천재교과서", "미래엔", "아이스크림미디어", "동아출판", "지학사"]
         for topic in topics:
-            arts = [a for a in crawl_google_news(topic) if a['날짜'] >= threshold]
+            arts = [a for a in crawl_naver_news(topic) if a['날짜'] >= threshold]
             if arts:
-                with st.expander(f"📘 {topic} 관련 최신 뉴스"):
+                with st.expander(f"📘 {topic} 관련 뉴스"):
                     render_articles(arts)
