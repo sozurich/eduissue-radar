@@ -89,7 +89,7 @@ uploaded_file = st.file_uploader("카카오톡 채팅 .txt 파일을 업로드�
 if uploaded_file:
     df = parse_kakao_text(uploaded_file)
     df['날짜'] = df['날짜'].fillna(method='ffill')
-    df['날짜'] = pd.to_datetime(df['날짜'].str.extract(r'(\d{4}년 \d{1,2}월 \d{1,2}일)')[0], format="%Y년 %m월 %d일")
+    df['날짜'] = pd.to_datetime(df['날짜'].str.extract(r'(\d{4}년 \d{1,2}월 \d{1,2}일)')[0], format='%Y년 %m월 %d일', errors='coerce').fillna(pd.Timestamp.today())
 
     min_date = df['날짜'].min()
     max_date = df['날짜'].max()
@@ -127,7 +127,14 @@ if uploaded_file:
             for word, _ in top_issue_keywords[:3]:
                 with st.expander(f"🔎 {word} 관련 뉴스"):
                     articles = crawl_google_news(word)
-                    for article in articles[:5]:
+                    
+if not articles:
+    st.markdown("뉴스가 없습니다.")
+else:
+    for article in articles[:5]:
+        st.container().markdown(f"**{article['제목']}** ({article['표시날짜']})")
+        st.link_button("🔗 뉴스 보러가기", url=article["링크"])
+
                         st.markdown(f"**{article['제목']}** ({article['표시날짜']})")
                         st.link_button("🔗 뉴스 보러가기", url=article["링크"])
 
@@ -137,6 +144,13 @@ if uploaded_file:
             for topic in extra_topics:
                 with st.expander(f"📘 {topic} 관련 뉴스"):
                     articles = crawl_google_news(topic)
-                    for article in articles[:5]:
+                    
+if not articles:
+    st.markdown("뉴스가 없습니다.")
+else:
+    for article in articles[:5]:
+        st.container().markdown(f"**{article['제목']}** ({article['표시날짜']})")
+        st.link_button("🔗 뉴스 보러가기", url=article["링크"])
+
                         st.markdown(f"**{article['제목']}** ({article['표시날짜']})")
                         st.link_button("🔗 뉴스 보러가기", url=article["링크"])
