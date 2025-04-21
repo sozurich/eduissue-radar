@@ -5,7 +5,9 @@ import re
 from collections import Counter
 from datetime import datetime
 import requests
+import openai
 
+# 1. Kakao 텍스트 파싱
 def parse_kakao_text(file):
     text = file.read().decode('utf-8')
     lines = text.splitlines()
@@ -28,6 +30,7 @@ def parse_kakao_text(file):
             parsed.append({"날짜": current_date, "사용자": user, "시간": timestamp, "메시지": msg})
     return pd.DataFrame(parsed)
 
+# 2. 민원 키워드 추출
 issue_keywords = ["배송","지연","누락","불량","부족","정산","반품","추가","오류"]
 def extract_issues(df):
     msgs = df[df['메시지'].str.contains('|'.join(issue_keywords))]
@@ -36,18 +39,19 @@ def extract_issues(df):
     cnt = Counter(nouns)
     return msgs, cnt.most_common(10)
 
+# 3. 네이버 OpenAPI 뉴스 크롤링
 def crawl_naver_openapi(query):
     client_id = st.secrets.get("NAVER_CLIENT_ID")
     client_secret = st.secrets.get("NAVER_CLIENT_SECRET")
     if not client_id or not client_secret:
-        st.error("NAVER API 키를 설정하세요")
+        st.error("NAVER API 키를 설정해주세요.")
         return []
     headers = {
         "X-Naver-Client-Id": client_id,
         "X-Naver-Client-Secret": client_secret
     }
     params = {
-        "query": query,
+        "query": query + " 교과서",
         "display": 5,
         "sort": "date"
     }
@@ -68,6 +72,25 @@ def crawl_naver_openapi(query):
         results.append({"제목": title, "링크": link, "날짜": pub, "표시날짜": pub.strftime('%Y-%m-%d')})
     return results
 
+# 4. GPT 요약 함수
+def summarize_with_gpt(messages):
+    openai.api_key = st.secrets.get("OPENAI_API_KEY")
+    if not openai.api_key:
+        st.error("OPENAI_API_KEY를 Secrets에 설정해주세요.")
+        return ""
+    prompt = (
+        "아래는 교과서 관련 민원 메시지 대화입니다. 주요 이슈와 분위기를 "
+        "3~4문장으로 요약해 주세요.\n\n"
+        + "\n".join(messages)
+    )
+    resp = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role":"user","content":prompt}],
+        temperature=0.7,
+    )
+    return resp.choices[0].message.content
+
+# 5. 기사 렌더링
 def render_articles(articles):
     if not articles:
         st.markdown("뉴스가 없습니다.")
@@ -77,8 +100,9 @@ def render_articles(articles):
                 st.markdown(f"**{art['제목']}** ({art['표시날짜']})")
                 st.link_button("🔗 뉴스 보러가기", url=art["링크"])
 
+# 6. Streamlit UI
 st.title("📚 EduIssue Radar")
-st.markdown("교과서 민원 메시지 + 네이버 OpenAPI 뉴스 요약")
+st.markdown("교과서 민원 메시지 분석 및 네이버 OpenAPI 기반 뉴스 요약")
 
 uploaded = st.file_uploader("카카오톡 채팅 .txt 파일 업로드", type="txt")
 if uploaded:
@@ -93,7 +117,7 @@ if uploaded:
     sd, ed = st.date_input("분석 기간 선택", [min_d, max_d])
     df_sel = df[(df['날짜'] >= pd.to_datetime(sd)) & (df['날짜'] <= pd.to_datetime(ed))]
 
-    tab1, tab2 = st.tabs(["📊 민원 분석", "📰 키워드 뉴스"])
+    tab1, tab2, tab3 = st.tabs(["📊 민원 분석", "📰 뉴스 요약", "📝 GPT 요약"])
     with tab1:
         st.success(f"{sd} ~ {ed} 메시지 {len(df_sel)}건 분석")
         iss_df, top = extract_issues(df_sel)
@@ -107,16 +131,17 @@ if uploaded:
     with tab2:
         st.subheader("📰 연관 뉴스")
         _, top_issues = extract_issues(df_sel)
-        related = [kw for kw,_ in top_issues[:3]]
-        for t in related:
+        topics = [kw for kw,_ in top_issues[:3]]
+        for t in topics:
             arts = crawl_naver_openapi(t)
             with st.expander(f"🔎 {t} 관련 뉴스"):
                 render_articles(arts)
-
-        st.markdown("### 📚 주제별 추천 뉴스")
-        extra_topics = ["교과서", "AI 디지털교과서", "비상교육", "천재교육", "천재교과서", 
-                        "미래엔", "아이스크림미디어", "동아출판", "지학사"]
-        for topic in extra_topics:
-            arts = crawl_naver_openapi(topic)
-            with st.expander(f"📘 {topic} 관련 뉴스"):
-                render_articles(arts)
+    with tab3:
+        st.subheader("📝 GPT 요약")
+        msgs = df_sel["메시지"].tolist()
+        if msgs:
+            snippet = msgs[-1000:]
+            summary = summarize_with_gpt(snippet)
+            st.write(summary)
+        else:
+            st.markdown("분석할 메시지가 없습니다.")
