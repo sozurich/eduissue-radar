@@ -2,4 +2,5 @@ streamlit
 pandas
 requests
 openai
-# gensim is optional; local summary works without it
+gensim==4.3.1
+Cython
