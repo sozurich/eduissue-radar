@@ -6,6 +6,7 @@ from collections import Counter
 from datetime import datetime
 import requests
 from openai import OpenAI
+from openai.error import RateLimitError
 
 # 1. Kakao 텍스트 파싱
 def parse_kakao_text(file):
@@ -72,7 +73,7 @@ def crawl_naver_openapi(query):
         results.append({"제목": title, "링크": link, "날짜": pub, "표시날짜": pub.strftime('%Y-%m-%d')})
     return results
 
-# 4. GPT 요약 함수 with new OpenAI client
+# 4. GPT 요약 함수 with rate limit handling
 def summarize_with_gpt(messages):
     api_key = st.secrets.get("OPENAI_API_KEY")
     if not api_key:
@@ -84,12 +85,16 @@ def summarize_with_gpt(messages):
         "3~4문장으로 요약해 주세요.\n\n"
         + "\n".join(messages)
     )
-    resp = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role":"user","content":prompt}],
-        temperature=0.7,
-    )
-    return resp.choices[0].message.content
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role":"user","content":prompt}],
+            temperature=0.7,
+        )
+        return resp.choices[0].message.content
+    except RateLimitError:
+        st.warning("요청이 많아 요약을 잠시 후에 다시 시도하세요.")
+        return "요약을 처리할 수 없습니다. 잠시 후 다시 시도해주세요."
 
 # 5. 기사 렌더링
 def render_articles(articles):
@@ -116,9 +121,9 @@ if uploaded:
     min_d, max_d = df['날짜'].min().date(), df['날짜'].max().date()
     st.markdown(f"**분석 가능한 날짜:** {min_d} ~ {max_d}")
     sd, ed = st.date_input("분석 기간 선택", [min_d, max_d])
-    df_sel = df[(df['날짜'] >= pd.to_datetime(sd)) & (df['날짜'] <= pd.to_datetime(ed))]
+    df_sel = df[(df['날짜'] >= sd) & (df['날짜'] <= ed)]
 
-    tab1, tab2, tab3 = st.tabs(["📊 민원 분석", "📰 뉴스 요약", "📝 GPT 요약"])
+    tab1, tab2, tab3 = st.tabs(["📊 민원 분석", "📰 연관 뉴스", "📝 GPT 요약"])
     with tab1:
         st.success(f"{sd} ~ {ed} 메시지 {len(df_sel)}건 분석")
         iss_df, top = extract_issues(df_sel)
@@ -132,10 +137,9 @@ if uploaded:
     with tab2:
         st.subheader("📰 연관 뉴스")
         _, top_issues = extract_issues(df_sel)
-        topics = [kw for kw,_ in top_issues[:3]]
-        for t in topics:
-            arts = crawl_naver_openapi(t)
-            with st.expander(f"🔎 {t} 관련 뉴스"):
+        for kw, _ in top_issues[:3]:
+            arts = crawl_naver_openapi(kw)
+            with st.expander(f"🔎 {kw} 관련 뉴스"):
                 render_articles(arts)
     with tab3:
         st.subheader("📝 GPT 요약")
