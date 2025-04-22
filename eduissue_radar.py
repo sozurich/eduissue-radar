@@ -8,11 +8,25 @@ import requests
 import openai
 from openai import OpenAI
 import time
-from gensim.summarization import summarize as gensim_summarize
 
-# Initialize session state for summary request
-if 'gpt_requested' not in st.session_state:
-    st.session_state['gpt_requested'] = False
+# Try importing gensim summarize
+try:
+    from gensim.summarization import summarize as gensim_summarize
+    gensim_available = True
+except ModuleNotFoundError:
+    gensim_available = False
+    def gensim_summarize(text, ratio):
+        return "로컬 요약 기능 사용을 위해 gensim을 설치해주세요."
+
+# Cache decorator alias
+@st.cache_data(ttl=3600)
+def summarize_gensim(text, ratio):
+    if not gensim_available:
+        return "로컬 요약을 지원하지 않습니다."
+    try:
+        return gensim_summarize(text, ratio=ratio)
+    except ValueError:
+        return "로컬 요약을 위한 충분한 텍스트가 없습니다."
 
 # 1. Kakao 텍스트 파싱
 def parse_kakao_text(file):
@@ -93,13 +107,6 @@ def summarize_with_gpt(messages):
 def summarize_cached(messages):
     return summarize_with_gpt(messages)
 
-@st.cache_data(ttl=3600)
-def summarize_gensim(text, ratio):
-    try:
-        return gensim_summarize(text, ratio=ratio)
-    except ValueError:
-        return "로컬 요약을 위한 충분한 텍스트가 없습니다."
-
 # 5. Streamlit UI
 st.title("📚 EduIssue Radar")
 st.markdown("교과서 민원 메시지 분석 + 뉴스 요약 (GPT & 로컬)")
@@ -108,10 +115,7 @@ uploaded = st.file_uploader("카카오톡 채팅 .txt 파일 업로드", type="t
 if uploaded:
     df = parse_kakao_text(uploaded)
     df['날짜'] = pd.to_datetime(df['날짜'].str.extract(r'(\d{4}년 \d{1,2}월 \d{1,2}일)', expand=False), format='%Y년 %m월 %d일', errors='coerce').dt.date
-    sd, ed = st.date_input("분석 기간 선택", [df['날짜'].min(), df['날짜'].max()])
-    df_sel = df[(df['날짜']>=sd)&(df['날짜']<=ed)]
-    iss_df, top = extract_issues(df_sel)
-
+    iss_df, top = extract_issues(df)
     tab1, tab2, tab3 = st.tabs(["📊 민원 분석","📰 연관 뉴스","📝 요약"])
     with tab1:
         st.write(iss_df[['날짜','시간','사용자','메시지']])
@@ -123,17 +127,17 @@ if uploaded:
     with tab2:
         for kw,_ in top[:3]:
             with st.expander(f"🔎 {kw} 관련 뉴스"):
-                arts = crawl_naver_openapi(kw)
-                for art in arts:
+                for art in crawl_naver_openapi(kw):
                     st.markdown(f"- [{art['제목']}]({art['링크']}) ({art['표시날짜']})")
     with tab3:
-        msgs = df_sel['메시지'].tolist()
+        msgs = df['메시지'].tolist()
         text = "\n".join(msgs)
-        st.subheader("GPT 요약")
+        # GPT 요약
         if st.button("✅ GPT 요약 요청"):
             summary_gpt = summarize_cached(tuple(msgs[-200:]))
+            st.subheader("GPT 요약")
             st.write(summary_gpt)
-        st.markdown("---")
+        # Local gensim summary
         st.subheader("로컬 요약 (Gensim)")
         ratio = st.slider("요약 비율", 0.05, 0.3, 0.1, 0.05)
         summary_local = summarize_gensim(text, ratio)
