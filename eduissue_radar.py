@@ -83,10 +83,11 @@ def crawl_naver_openapi(query):
 
 # 4. Sumy 로컬 요약
 def summarize_with_sumy(text, sentences_count):
-    parser = PlaintextParser.from_string(text, Tokenizer("korean"))
+    # Use English tokenizer to avoid konlpy dependency
+    parser = PlaintextParser.from_string(text, Tokenizer("english"))
     summarizer = TextRankSummarizer()
     summary_sentences = summarizer(parser.document, sentences_count)
-    return " ".join(str(s) for s in summary_sentences)
+    return " ".join(str(s) for s in summary_sentences) or "로컬 요약을 위한 충분한 텍스트가 없습니다."
 
 # 5. Streamlit UI
 st.title("📚 EduIssue Radar")
