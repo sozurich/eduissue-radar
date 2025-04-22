@@ -117,10 +117,11 @@ if uploaded:
         df['날짜'].str.extract(r'(\d{4}년 \d{1,2}월 \d{1,2}일)')[0],
         format='%Y년 %m월 %d일',
         errors='coerce'
-    ).fillna(pd.Timestamp.today())
-    min_d, max_d = df['날짜'].min().date(), df['날짜'].max().date()
+    ).dt.date
+    min_d, max_d = df['날짜'].min(), df['날짜'].max()
     st.markdown(f"**분석 가능한 날짜:** {min_d} ~ {max_d}")
     sd, ed = st.date_input("분석 기간 선택", [min_d, max_d])
+    # 날짜 비교를 안전하게 날짜끼리 비교하도록 수정
     df_sel = df[(df['날짜'] >= sd) & (df['날짜'] <= ed)]
 
     tab1, tab2, tab3 = st.tabs(["📊 민원 분석", "📰 연관 뉴스", "📝 GPT 요약"])
