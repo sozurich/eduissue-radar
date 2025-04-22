@@ -5,6 +5,8 @@ import re
 from collections import Counter
 from datetime import datetime
 import requests
+import nltk
+nltk.download('punkt')
 from sumy.parsers.plaintext import PlaintextParser
 from sumy.nlp.tokenizers import Tokenizer
 from sumy.summarizers.text_rank import TextRankSummarizer
@@ -83,7 +85,6 @@ def crawl_naver_openapi(query):
 
 # 4. Sumy 로컬 요약
 def summarize_with_sumy(text, sentences_count):
-    # Use English tokenizer to avoid konlpy dependency
     parser = PlaintextParser.from_string(text, Tokenizer("english"))
     summarizer = TextRankSummarizer()
     summary_sentences = summarizer(parser.document, sentences_count)
