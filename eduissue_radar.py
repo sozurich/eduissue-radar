@@ -7,6 +7,7 @@ from datetime import datetime
 import requests
 import openai
 from openai import OpenAI
+import time
 
 # 1. Kakao 텍스트 파싱
 def parse_kakao_text(file):
@@ -73,11 +74,11 @@ def crawl_naver_openapi(query):
         results.append({"제목": title, "링크": link, "날짜": pub, "표시날짜": pub.strftime('%Y-%m-%d')})
     return results
 
-# 4. GPT 요약 함수 with rate limit handling
+# 4. GPT 요약 함수 with backoff
 def summarize_with_gpt(messages):
     api_key = st.secrets.get("OPENAI_API_KEY")
     if not api_key:
-        st.error("OPENAI_API_KEY를 Secrets에 설정해주세요.")
+        st.error("OPENAI_API_KEY를 설정해주세요.")
         return ""
     client = OpenAI(api_key=api_key)
     prompt = (
@@ -85,16 +86,26 @@ def summarize_with_gpt(messages):
         "3~4문장으로 요약해 주세요.\n\n"
         + "\n".join(messages)
     )
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role":"user","content":prompt}],
-            temperature=0.7,
-        )
-        return resp.choices[0].message.content
-    except openai.RateLimitError:
-        st.warning("요청이 많아 요약을 잠시 후에 다시 시도하세요.")
-        return "요약을 처리할 수 없습니다. 잠시 후 다시 시도해주세요."
+    retries = 3
+    for i in range(retries):
+        try:
+            resp = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role":"user","content":prompt}],
+                temperature=0.7,
+            )
+            return resp.choices[0].message.content
+        except Exception as e:
+            if i < retries - 1:
+                time.sleep(2 ** i)
+            else:
+                st.warning("요청이 많아 요약을 잠시 후에 다시 시도하세요.")
+                return "요약을 처리할 수 없습니다. 잠시 후 다시 시도해주세요."
+
+# Cache summary results
+@st.cache_data(ttl=3600)
+def summarize_cached(messages):
+    return summarize_with_gpt(messages)
 
 # 5. 기사 렌더링
 def render_articles(articles):
@@ -121,7 +132,6 @@ if uploaded:
     min_d, max_d = df['날짜'].min(), df['날짜'].max()
     st.markdown(f"**분석 가능한 날짜:** {min_d} ~ {max_d}")
     sd, ed = st.date_input("분석 기간 선택", [min_d, max_d])
-    # 날짜 비교를 안전하게 날짜끼리 비교하도록 수정
     df_sel = df[(df['날짜'] >= sd) & (df['날짜'] <= ed)]
 
     tab1, tab2, tab3 = st.tabs(["📊 민원 분석", "📰 연관 뉴스", "📝 GPT 요약"])
@@ -146,8 +156,11 @@ if uploaded:
         st.subheader("📝 GPT 요약")
         msgs = df_sel["메시지"].tolist()
         if msgs:
-            snippet = msgs[-1000:]
-            summary = summarize_with_gpt(snippet)
-            st.write(summary)
+            if st.button("✅ 요약 요청"):
+                snippet = msgs[-500:]
+                summary = summarize_cached(tuple(snippet))
+                st.write(summary)
+            else:
+                st.markdown("버튼을 눌러 요약을 실행하세요.")
         else:
             st.markdown("분석할 메시지가 없습니다.")
