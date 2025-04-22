@@ -1,6 +1,5 @@
 streamlit
 pandas
 requests
-openai
-gensim==4.3.1
-Cython
+sumy
+nltk
