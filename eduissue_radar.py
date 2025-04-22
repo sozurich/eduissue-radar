@@ -5,8 +5,8 @@ import re
 from collections import Counter
 from datetime import datetime
 import requests
+import openai
 from openai import OpenAI
-from openai.error import RateLimitError
 
 # 1. Kakao 텍스트 파싱
 def parse_kakao_text(file):
@@ -92,7 +92,7 @@ def summarize_with_gpt(messages):
             temperature=0.7,
         )
         return resp.choices[0].message.content
-    except RateLimitError:
+    except openai.RateLimitError:
         st.warning("요청이 많아 요약을 잠시 후에 다시 시도하세요.")
         return "요약을 처리할 수 없습니다. 잠시 후 다시 시도해주세요."
 
